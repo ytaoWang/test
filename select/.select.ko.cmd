@@ -1,0 +1,1 @@
+cmd_/media/H/git/program/lkd/select/select.ko := ld -r -m elf_i386 -T /usr/src/linux-headers-3.0.0-14-generic/scripts/module-common.lds --build-id  -o /media/H/git/program/lkd/select/select.ko /media/H/git/program/lkd/select/select.o /media/H/git/program/lkd/select/select.mod.o

@@ -1,0 +1,208 @@
+#include <sys/select.h>
+#include <sys/time.h>
+#include <sys/socket.h>
+#include <netinet/tcp.h>
+#include <netdb.h>
+
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <stdio.h>
+#include <fcntl.h>
+
+#define EVENT_READ (1<<0)
+#define EVENT_WRITE (1<<1)
+#define EVENT_EXCEPTION (1<<2)
+
+#define MAX 2000
+#define LEN 1024
+
+//select event
+struct se {
+    int fd;
+    int event;
+    char rbuf[LEN];
+    char wbuf[LEN];
+};
+
+static int handle_write(struct se *ev);
+static int handle_read(struct se *ev);
+static int handle_exception(struct se *ev);
+
+int creat_socket(const char *address,int port)
+{
+    int fd;
+    struct sockaddr_in  addr;
+    
+    if((fd = socket(AF_INET,SOCK_STREAM,0)) < 0)
+        return -1;
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr(address);
+    addr.sin_port = htons(port);
+    
+    if(connect(fd,(struct sockaddr *)&addr,sizeof(addr)) == -1)
+    {
+        close(fd);
+        return -1;
+    }
+
+    return fd;
+}
+
+void setNonblock(int fd)
+{
+    int flags;
+    
+    if(fcntl(fd,F_GETFD,&flags) < 0) {
+        perror("setNonblock");
+        return;
+    }
+    
+    flags |= O_NONBLOCK;
+    
+    if(fcntl(fd,F_SETFD,flags) < 0) {
+        perror("setNonblock");
+        return;
+    }
+    
+}
+
+int main(int argc,char *argv)
+{
+    int sockfd,port,max,i,len,curr,s,retval;
+    fd_set rfd,wfd,exfd,res_rfd,res_wfd,res_exfd;
+    
+    if(argc != 3)
+    {
+        fprintf(stderr,"usage:%s address port\n",argv[0]);
+        return -1;
+    }
+    
+    port = atoi(argv[2]);
+    if((sockfd = creat_socket(argv[1],port)) <0)
+    {
+        fprintf(stderr,"fail to creat socket:%s\n",strerror(errno));
+        return -1;
+    }
+    
+    FD_ZERO(&rfd);
+    FD_ZERO(&wfd);
+    FD_ZERO(&exfd);
+    
+    FD_ZERO(&res_rfd);
+    FD_ZERO(&res_wfd);
+    FD_ZERO(&res_exfd);
+    
+    FD_SET(&sockfd,&rfd);
+    FD_SET(&sockfd,&wfd);
+    
+    max = sockfd;
+    setNonblock(sockfd);
+    
+    curr = 0;
+    len = 1;
+    memset(ev,0,sizeof(ev[0]) * MAX);
+    
+    ev[curr].fd = sockfd;
+    ev[curr++].event = EVENT_READ|EVENT_EXCEPTIOn;
+    
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    
+    while(1) 
+    {
+        res_rfd = rfd;
+        res_wfd = wfd;
+        res_exfd = exfd;
+        
+        retval = select(max+1,&res_rfd,&res_wfd,&res_exfd,&tv);
+        if(retval < 0)
+        {
+            if(errno == EAGIN || errno == EINTR || errno == EWOULDBLOCK)
+                continue;
+            return -1;
+        }
+        
+        printf("return fd:%d\n",retval);
+        
+        for(i = 0;i < retval; ++i) {
+            if(FD_ISSET(ev[i].fd,&res_rfd)) {
+                if(handle_read(&ev[i]) < 0)
+                {
+                    FD_CLR(ev[i].fd,&exfd);
+                    FD_CLR(ev[i].fd,&rfd);
+                    FD_CLR(ev[i].fd,&wfd);
+                    memset(&ev[i],0,sizeof(ev[i]));
+                    continue;
+                }
+                FD_SET(ev[i].fd,&wfd);
+                FD_SET(ev[i].fd,&rfd);
+                ev[i].event &= ~EVENT_READ;
+                ev[i].event |= EVENT_WRITE;
+            }
+            if(FD_ISSET(ev[i].fd,&res_wfd)) {
+                if(handle_write(&ev[i]) < 0) {
+                    FD_CLR(ev[i].fd,&exfd);
+                    FD_CLR(ev[i].fd,&rfd);
+                    FD_CLR(ev[i].fd,&wfd);
+                    memset(&ev[i],0,sizeof(ev[i]));
+                    continue;
+                }
+                
+                FD_SET(ev[i].fd,&rfd);
+                FD_SET(ev[i].fd,&wfd);
+                ev[i].event &= ~EVENT_WRITE;
+                ev[i].event |= EVENT_READ;
+            }
+            
+            if(FD_ISSET(ev[i].fd,&res_exfd))
+            {
+                FD_CLR(ev[i].fd,&exfd);
+                FD_CLR(ev[i].fd,&rfd);
+                FD_CLR(ev[i].fd,&wfd);
+                handle_exception(&ev[i]);
+                memset(&ev[i],0,sizeof(ev[i]));
+                continue;
+            }
+        }
+        
+    }
+    
+    return 0;
+}
+
+
+static int handle_write(struct se *p)
+{
+    int len;
+ again:
+    if((len = send(p->fd,p->rbuf,LEN,0))<0) {
+        if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+            goto again;
+        return -1;
+    }
+    
+    printf("write:%s\n",p->rbuf);
+    return 0;
+}
+
+static int handle_read(struct se *p)
+{
+    int len;
+ again:
+    if((len = recv(p->fd,p->rbuf,LEN,0))<0) {
+        if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+            goto again;
+        return -1;
+    }
+    
+    printf("write:%s\n",p->rbuf);
+    return 0;
+}
+
+static int handle_exception(struct se *p)
+{
+    perror("handle_error\n");
+    return 0;
+}

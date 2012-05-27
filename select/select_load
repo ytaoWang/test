@@ -1,0 +1,20 @@
+#!/bin/bash
+module="select"
+device="select"
+mode="644"
+
+/sbin/insmod ./$module.ko $* || exit 1
+
+#rm original module
+
+rm -f /dev/${device}
+
+major=$(awk "\$2==\"$module\" {print \$1}" /proc/devices)
+
+echo $major
+mknod /dev/${device} c $major 0
+
+group="staff"
+
+chgrp $group /dev/${device}
+chmod $mode /dev/${device}
