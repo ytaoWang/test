@@ -1,1 +1,1 @@
-cmd_/media/H/git/program/lkd/select/select.o := ld -m elf_i386   -r -o /media/H/git/program/lkd/select/select.o /media/H/git/program/lkd/select/scull.o 
+cmd_/media/H/github/test/select/select.o := ld -m elf_i386   -r -o /media/H/github/test/select/select.o /media/H/github/test/select/scull.o 

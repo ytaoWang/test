@@ -1,2 +1,2 @@
-/media/H/git/program/lkd/select/select.ko
-/media/H/git/program/lkd/select/scull.o
+/media/H/github/test/select/select.ko
+/media/H/github/test/select/scull.o

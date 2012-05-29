@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <stdint.h>
 #include <errno.h>
+#include <string.h>
 
 #define SELECT "/dev/select"
 
@@ -21,16 +22,41 @@ int main(int argc, char *argv[])
     int ev[2];
     uint64_t t;
     char rbuf[33],wbuf[33];
-    int rcnt,wcnt;
+    int rcnt,wcnt,flags;
 
     if((fd1 = open(SELECT,O_RDONLY|O_NONBLOCK)) < 0) {
         fprintf(stderr,"open %s error:%s",SELECT,strerror(errno));
         return -1;
     }
     
+    if((flags = fcntl(fd1,F_GETFL,0)) < 0) {
+        fprintf(stderr,"set Nonblock error:%s\n",strerror(errno));
+        return -1;
+    }
+    
+    flags |= O_NONBLOCK;
+    
+    if(fcntl(fd1,F_SETFL,flags) < 0) {
+        fprintf(stderr,"set Nonblock error:%s\n",strerror(errno));
+        return -1;
+    }
+    
+    
     if((fd2 = open(SELECT,O_WRONLY|O_NONBLOCK)) < 0) {
         fprintf(stderr,"open %s error:%s",SELECT,strerror(errno));
         close(fd1);
+        return -1;
+    }
+ 
+    if((flags = fcntl(fd2,F_GETFL,0)) < 0) {
+        fprintf(stderr,"set Nonblock error:%s\n",strerror(errno));
+        return -1;
+    }
+    
+    flags |= O_NONBLOCK;
+    
+    if(fcntl(fd2,F_SETFL,flags) < 0) {
+        fprintf(stderr,"set Nonblock error:%s\n",strerror(errno));
         return -1;
     }
     
@@ -101,8 +127,8 @@ int main(int argc, char *argv[])
                 }
             
                 if(FD_ISSET(ev[i],&res_rfd)) {
-                    memset(rbuf,0,32);
-                    if(read(ev[i],rbuf,32) < 0) {
+                    memset(rbuf,0,33);
+                    if(read(ev[i],rbuf,33) < 0) {
                         FD_CLR(ev[i],&exfd);
                         FD_CLR(ev[i],&rfd);
                         FD_CLR(ev[i],&wfd);
@@ -130,7 +156,7 @@ int main(int argc, char *argv[])
                     wcnt++;
                     if(wcnt == SELECT_MAX)
                         continue;
-                    fprintf(stderr,"ready to write,wcnt:%d\n",wcnt);
+                    fprintf(stderr,"ready to write,wcnt:%d,buf:%s\n",wcnt,wbuf);
                 }
 
             }

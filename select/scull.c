@@ -76,16 +76,16 @@ ssize_t scull_read(struct file *filp,char __user *buf,size_t count,loff_t *offp)
         PDEBUG("\"%s\" reading: going to sleep\n",current->comm);
         #endif
         
-        if(down_interruptible(&dev->sem))
-            return -ERESTARTSYS;
+        // if(down_interruptible(&dev->sem))
+        //    return -ERESTARTSYS;
         scull_wait_reader(dev);
-        up(&dev->sem);
     }
     
     if(down_interruptible(&dev->sem))
         return -ERESTARTSYS;
 
     pos = list_entry(dev->list.next,struct scull_qset,list);
+    printk(KERN_NOTICE "\"%s\" read data:%s\n",current->comm,(char *)pos->data);
     if(copy_to_user(buf,pos->data,count)) {
         up(&dev->sem);
         return -EFAULT;
@@ -96,11 +96,14 @@ ssize_t scull_read(struct file *filp,char __user *buf,size_t count,loff_t *offp)
     if(atomic_read(&dev->len) == SCULL_MAX) {
         atomic_dec(&dev->len);
         wake_up_interruptible(&dev->outq);
-        kill_fasync(&dev->async_queue,SIGIO,POLL_OUT);
+        //if(dev->async_queue)
+        //    kill_fasync(&dev->async_queue,SIGIO,POLL_OUT);
     }
     
     up(&dev->sem);
     
+    printk(KERN_NOTICE "scull_read is called in here.\n");
+
     return count;
 }
 
@@ -122,10 +125,10 @@ static ssize_t scull_write(struct file *filp,const char __user *buf,size_t count
         PDEBUG("\"%s\" writing: going to sleep\n",current->comm);
         #endif        
         
-        if(down_interruptible(&dev->sem))
-            return -ERESTARTSYS;
+        //if(down_interruptible(&dev->sem))
+        //    return -ERESTARTSYS;
         scull_wait_writer(dev);
-        up(&dev->sem);
+        //up(&dev->sem);
     }
 
     if(!(pos = kmem_cache_alloc(scullc_cache,GFP_KERNEL)))
@@ -155,8 +158,11 @@ static ssize_t scull_write(struct file *filp,const char __user *buf,size_t count
     
     if(atomic_add_return(1,&dev->len) == 1) {
         wake_up_interruptible(&dev->inq);
-        kill_fasync(&dev->async_queue,SIGIO,POLL_IN);
+        //  if(dev->async_queue)
+        //    kill_fasync(&dev->async_queue,SIGIO,POLL_IN);
     }
+    
+    printk(KERN_NOTICE "scull_write is called in here.\n");
     
     return count;
 }
@@ -183,6 +189,14 @@ static int scull_release(struct inode *inode,struct file *filep)
     return 0;
 }
 
+static int scull_fasync(int fd,struct file *filp,int mode)
+{
+    //    struct scull_dev *dev = filp->private_data;
+    return -ENOSYS;
+    //return fasync_helper(fd,filp,mode,&dev->async_queue);
+}
+
+
 static unsigned int scull_poll(struct file *filp,struct poll_table_struct *wait)
 {
     struct scull_dev *dev = filp->private_data;
@@ -193,9 +207,9 @@ static unsigned int scull_poll(struct file *filp,struct poll_table_struct *wait)
     poll_wait(filp,&dev->inq,wait);
     poll_wait(filp,&dev->outq,wait);
     
-    if((filp->f_flags & O_RDONLY) && atomic_read(&dev->len) != 0)
+    if(atomic_read(&dev->len) != 0)
         mask |= POLLIN | POLLRDNORM;
-    if((filp->f_flags & O_WRONLY) && atomic_read(&dev->len) != SCULL_MAX)
+    if(atomic_read(&dev->len) != SCULL_MAX)
         mask |= POLLOUT | POLLWRNORM;
     
     return mask;
@@ -210,13 +224,14 @@ struct file_operations scull_fops = {
     .open = scull_open,
     .release = scull_release,
     .poll = scull_poll,
+    .fasync = scull_fasync,
 };
 
 
 static void scull_wait_reader(struct scull_dev *dev)
 {
     DEFINE_WAIT(wait);
-    
+    //up(&dev->sem);
     prepare_to_wait(&dev->inq,&wait,TASK_INTERRUPTIBLE);
     schedule();
     finish_wait(&dev->inq,&wait);
@@ -225,7 +240,7 @@ static void scull_wait_reader(struct scull_dev *dev)
 static void scull_wait_writer(struct scull_dev *dev)
 {
     DEFINE_WAIT(wait);
-    
+    //up(&dev->sem);
     prepare_to_wait(&dev->outq,&wait,TASK_INTERRUPTIBLE);
     schedule();
     finish_wait(&dev->outq,&wait);
@@ -239,6 +254,7 @@ static void scull_setup_cdev(struct scull_dev *dev,int index)
     cdev_init(&dev->cdev,&scull_fops);
     dev->cdev.owner = THIS_MODULE;
     dev->cdev.ops = &scull_fops;
+    dev->async_queue = NULL;
     err = cdev_add(&dev->cdev,devno,1);
     
     if(err)
@@ -311,7 +327,6 @@ int scull_init_module(void)
         atomic_set(&scull_devices[i].len,0);
         scull_setup_cdev(&scull_devices[i],i);
     }
-    
     return 0;
  fail:
     scull_cleanup_module();

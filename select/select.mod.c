@@ -43,7 +43,6 @@ __attribute__((section("__versions"))) = {
 	{ 0x37a0cba, "kfree" },
 	{ 0xe75663a, "prepare_to_wait" },
 	{ 0x57b09822, "up" },
-	{ 0x4b8b3ae4, "kill_fasync" },
 	{ 0xb00ccc33, "finish_wait" },
 	{ 0x362ef408, "_copy_from_user" },
 	{ 0x29537c9e, "alloc_chrdev_region" },
@@ -55,4 +54,4 @@ __attribute__((section(".modinfo"))) =
 "depends=";
 
 
-MODULE_INFO(srcversion, "5B028B4D81C0B7E1662B322");
+MODULE_INFO(srcversion, "A8CF98E0F0B8922BF2A82E4");
