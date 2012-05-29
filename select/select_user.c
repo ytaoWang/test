@@ -128,12 +128,13 @@ int main(int argc, char *argv[])
             
                 if(FD_ISSET(ev[i],&res_rfd)) {
                     memset(rbuf,0,33);
-                    if(read(ev[i],rbuf,33) < 0) {
+                    if(read(ev[i],rbuf,32) < 0) {
                         FD_CLR(ev[i],&exfd);
                         FD_CLR(ev[i],&rfd);
                         FD_CLR(ev[i],&wfd);
                         close(ev[i]);
                         ev[i] = 0;
+                        fprintf(stderr,"read error:%s\n",strerror(errno));
                     }
                     rcnt ++;
                     fprintf(stderr,"ready to read:%s,read cnt:%d\n",rbuf,rcnt);
@@ -152,6 +153,7 @@ int main(int argc, char *argv[])
                         FD_CLR(ev[i],&wfd);
                         close(ev[i]);
                         ev[i] = 0;
+                        fprintf(stderr,"write error:%s\n",strerror(errno));
                     }
                     wcnt++;
                     if(wcnt == SELECT_MAX)

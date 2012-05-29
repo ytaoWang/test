@@ -32,6 +32,7 @@ __attribute__((section("__versions"))) = {
 	{ 0xfcf580f6, "current_task" },
 	{ 0x50eedeb8, "printk" },
 	{ 0x2f287f0d, "copy_to_user" },
+	{ 0x69e638d, "fasync_helper" },
 	{ 0xb4390f9a, "mcount" },
 	{ 0xb5e8694f, "kmem_cache_free" },
 	{ 0xcf83da5, "cdev_add" },
@@ -43,6 +44,7 @@ __attribute__((section("__versions"))) = {
 	{ 0x37a0cba, "kfree" },
 	{ 0xe75663a, "prepare_to_wait" },
 	{ 0x57b09822, "up" },
+	{ 0x4b8b3ae4, "kill_fasync" },
 	{ 0xb00ccc33, "finish_wait" },
 	{ 0x362ef408, "_copy_from_user" },
 	{ 0x29537c9e, "alloc_chrdev_region" },
@@ -54,4 +56,4 @@ __attribute__((section(".modinfo"))) =
 "depends=";
 
 
-MODULE_INFO(srcversion, "A8CF98E0F0B8922BF2A82E4");
+MODULE_INFO(srcversion, "B3CEDDDA0360A52466C0FB5");

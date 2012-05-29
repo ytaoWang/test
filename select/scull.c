@@ -93,11 +93,11 @@ ssize_t scull_read(struct file *filp,char __user *buf,size_t count,loff_t *offp)
 
     scull_qset_destroy(pos);
 
-    if(atomic_read(&dev->len) == SCULL_MAX) {
+    if(atomic_read(&dev->len) <= SCULL_MAX) {
         atomic_dec(&dev->len);
         wake_up_interruptible(&dev->outq);
-        //if(dev->async_queue)
-        //    kill_fasync(&dev->async_queue,SIGIO,POLL_OUT);
+        if(dev->async_queue)
+           kill_fasync(&dev->async_queue,SIGIO,POLL_OUT);
     }
     
     up(&dev->sem);
@@ -156,10 +156,10 @@ static ssize_t scull_write(struct file *filp,const char __user *buf,size_t count
     
     up(&dev->sem);
     
-    if(atomic_add_return(1,&dev->len) == 1) {
+    if(atomic_add_return(1,&dev->len) >= 1) {
         wake_up_interruptible(&dev->inq);
-        //  if(dev->async_queue)
-        //    kill_fasync(&dev->async_queue,SIGIO,POLL_IN);
+        if(dev->async_queue)
+            kill_fasync(&dev->async_queue,SIGIO,POLL_IN);
     }
     
     printk(KERN_NOTICE "scull_write is called in here.\n");
@@ -191,9 +191,9 @@ static int scull_release(struct inode *inode,struct file *filep)
 
 static int scull_fasync(int fd,struct file *filp,int mode)
 {
-    //    struct scull_dev *dev = filp->private_data;
-    return -ENOSYS;
-    //return fasync_helper(fd,filp,mode,&dev->async_queue);
+    struct scull_dev *dev = filp->private_data;
+        //return -ENOSYS;
+    return fasync_helper(fd,filp,mode,&dev->async_queue);
 }
 
 
