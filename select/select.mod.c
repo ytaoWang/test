@@ -25,6 +25,7 @@ __attribute__((section("__versions"))) = {
 	{ 0x62b53a39, "cdev_init" },
 	{ 0xd8e484f0, "register_chrdev_region" },
 	{ 0xc8b57c27, "autoremove_wake_function" },
+	{ 0x7204132c, "__wake_up_sync" },
 	{ 0x670c0597, "down_interruptible" },
 	{ 0x7485e15e, "unregister_chrdev_region" },
 	{ 0xe174aa7, "__init_waitqueue_head" },
@@ -56,4 +57,4 @@ __attribute__((section(".modinfo"))) =
 "depends=";
 
 
-MODULE_INFO(srcversion, "B3CEDDDA0360A52466C0FB5");
+MODULE_INFO(srcversion, "EE955B3B5745B61F71671DD");

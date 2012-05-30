@@ -32,6 +32,7 @@ static struct kmem_cache *scullc_cache;
 static void scull_wait_reader(struct scull_dev *);
 static void scull_wait_writer(struct scull_dev *);
 static void scull_qset_destroy(struct scull_qset *);
+static int scull_fasync(int fd,struct file *filp,int mode);
 
 static int scull_trim(struct scull_dev *dev)
 {
@@ -184,9 +185,14 @@ static int scull_open(struct inode *inode,struct file *filp)
     return 0;
 }
 
-static int scull_release(struct inode *inode,struct file *filep)
+static int scull_release(struct inode *inode,struct file *filp)
 {
-    return 0;
+    struct scull_dev *dev = filp->private_data;
+    
+    wake_up_interruptible_sync(&dev->inq);
+    wake_up_interruptible_sync(&dev->outq);
+
+    return scull_fasync(-1,filp,0);
 }
 
 static int scull_fasync(int fd,struct file *filp,int mode)
