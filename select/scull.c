@@ -39,7 +39,7 @@ static int scull_trim(struct scull_dev *dev)
     struct scull_qset *n,*pos;
     
     list_for_each_entry_safe(pos,n,&dev->list,list) {
-        scull_qset_destroy(n);
+        scull_qset_destroy(pos);
     }
 
     return 0;
