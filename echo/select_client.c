@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <netinet/tcp.h>
 #include <netdb.h>
+#include <signal.h>
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -39,6 +40,7 @@ struct se {
 static int handle_write(struct se *ev);
 static int handle_read(struct se *ev);
 static int handle_exception(struct se *ev);
+static int signal_handler(int,void (*)(int));
 
 int creat_socket(const char *address,int port)
 {
@@ -61,6 +63,33 @@ int creat_socket(const char *address,int port)
     return fd;
 }
 
+
+static int set_signal_handler(int sig,void (*handler)(int))
+{
+    struct sigaction act,oact;
+    
+    memset(&act,0,sizeof(act));
+    memset(&oact,0,sizeof(oact));
+    
+    act.sa_handler = handler;
+    act.sa_flags = 0;
+    sigemptyset(&act.sa_mask);
+    
+    if(sigaction(sig,&act,NULL) < 0) {   
+        perror("set signal handler error");
+        return -1;
+    }
+    
+    if(act.sa_handler == SIG_DFL && 
+       sigaction(sig,NULL,&oact) == -1) {
+        perror("set signal handler error");
+        return -1;
+    }
+    
+    return 0;
+}
+
+
 void setNonblock(int fd)
 {
     int flags;
@@ -81,7 +110,7 @@ void setNonblock(int fd)
 
 int main(int argc,char *argv[])
 {
-    int sockfd,port,max,i,len,curr,s,retval,num;
+    int sockfd,port,max,i,len,curr,s,retval,num,j;
     fd_set rfd,wfd,exfd,res_rfd,res_wfd,res_exfd;
     struct se ev[MAX];
     struct timeval tv;
@@ -106,8 +135,14 @@ int main(int argc,char *argv[])
     
     curr = 0;
     len = 1;
+    
+    set_signal_handler(SIGPIPE,SIG_IGN);
+    
     memset(ev,0,sizeof(ev[0]) * MAX);
     
+    memset(&tv,0,sizeof(tv));
+    tv.tv_sec = 50;
+    tv.tv_usec = 0;
     for(i = 0;i< num;i++)
     {
         if((sockfd = creat_socket(argv[1],port)) <0)
@@ -155,47 +190,48 @@ int main(int argc,char *argv[])
         tv.tv_sec = 50;
         tv.tv_usec = 0;
 
-        for(i = 0;i < retval; ++i) {
-
-            if(FD_ISSET(ev[i].fd,&res_exfd))
-            {
-                FD_CLR(ev[i].fd,&exfd);
-                FD_CLR(ev[i].fd,&rfd);
-                FD_CLR(ev[i].fd,&wfd);
-                handle_exception(&ev[i]);
-                memset(&ev[i],0,sizeof(ev[i]));
-                continue;
-            }
-
-            if(FD_ISSET(ev[i].fd,&res_rfd)) {
-                if(handle_read(&ev[i]) < 0)
+        for(j = 0; j < retval;++j)
+            for(i = 0;i < max; ++i) {
+                if(!ev[i].fd) continue;
+                if(FD_ISSET(ev[i].fd,&res_exfd))
                 {
                     FD_CLR(ev[i].fd,&exfd);
                     FD_CLR(ev[i].fd,&rfd);
                     FD_CLR(ev[i].fd,&wfd);
+                    handle_exception(&ev[i]);
                     memset(&ev[i],0,sizeof(ev[i]));
                     continue;
                 }
-                FD_SET(ev[i].fd,&wfd);
-                FD_CLR(ev[i].fd,&rfd);
-                ev[i].event &= ~EVENT_READ;
-                ev[i].event |= EVENT_WRITE;
-            }
-            if(FD_ISSET(ev[i].fd,&res_wfd)) {
-                if(handle_write(&ev[i]) < 0) {
-                    FD_CLR(ev[i].fd,&exfd);
+
+                if(FD_ISSET(ev[i].fd,&res_rfd)) {
+                    if(handle_read(&ev[i]) < 0)
+                    {
+                        FD_CLR(ev[i].fd,&exfd);
+                        FD_CLR(ev[i].fd,&rfd);
+                        FD_CLR(ev[i].fd,&wfd);
+                        memset(&ev[i],0,sizeof(ev[i]));
+                        continue;
+                    }
+                    FD_SET(ev[i].fd,&wfd);
                     FD_CLR(ev[i].fd,&rfd);
-                    FD_CLR(ev[i].fd,&wfd);
-                    memset(&ev[i],0,sizeof(ev[i]));
-                    continue;
+                    ev[i].event &= ~EVENT_READ;
+                    ev[i].event |= EVENT_WRITE;
                 }
+                if(FD_ISSET(ev[i].fd,&res_wfd)) {
+                    if(handle_write(&ev[i]) < 0) {
+                        FD_CLR(ev[i].fd,&exfd);
+                        FD_CLR(ev[i].fd,&rfd);
+                        FD_CLR(ev[i].fd,&wfd);
+                        memset(&ev[i],0,sizeof(ev[i]));
+                        continue;
+                    }
                 
-                FD_SET(ev[i].fd,&rfd);
-                FD_CLR(ev[i].fd,&wfd);
-                ev[i].event &= ~EVENT_WRITE;
-                ev[i].event |= EVENT_READ;
+                    FD_SET(ev[i].fd,&rfd);
+                    FD_CLR(ev[i].fd,&wfd);
+                    ev[i].event &= ~EVENT_WRITE;
+                    ev[i].event |= EVENT_READ;
+                }
             }
-        }
         
     }
     
@@ -215,6 +251,7 @@ static int handle_write(struct se *p)
     h.length = strlen(q);
     memcpy(p->wbuf,&h,sizeof(h));
     memcpy(p->wbuf+sizeof(h),q,h.length);
+
  again:
     if((len = write(p->fd,p->wbuf,sizeof(h) + strlen(q)))<0) {
         if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
@@ -233,12 +270,17 @@ static int handle_read(struct se *p)
 
  again:
     if((len = read(p->fd,p->rbuf,LEN))<0) {
-        if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+        //fprintf(stderr,"read error:%s\n",strerror(errno));
+        if(errno == EINTR)
             goto again;
+        if(errno == EAGAIN || errno == EWOULDBLOCK)
+            return 0;
+        fprintf(stderr,"f:%s,line:%d,error:%s\n",__FUNCTION__,__LINE__,strerror(errno));
         return -1;
     }
-    
-    printf("f:%s,line:%d,read:%s\n",__FUNCTION__,__LINE__,p->rbuf + sizeof(*h));
+
+    printf("f:%s,line:%d,read:%s,fd:%d\n",__FUNCTION__,__LINE__,p->rbuf + sizeof(*h),p->fd);
+
     return 0;
 }
 

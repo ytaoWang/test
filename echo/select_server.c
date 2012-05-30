@@ -43,6 +43,33 @@ static int handle_write(struct se *ev);
 static int handle_read(struct se *ev);
 static int handle_exception(struct se *ev);
 
+
+static int set_signal_handler(int sig,void (*handler)(int))
+{
+    struct sigaction act,oact;
+    
+    memset(&act,0,sizeof(act));
+    memset(&oact,0,sizeof(oact));
+    
+    act.sa_handler = handler;
+    act.sa_flags = 0;
+    sigemptyset(&act.sa_mask);
+    
+    if(sigaction(sig,&act,NULL) < 0) {   
+        perror("set signal handler error");
+        return -1;
+    }
+    
+    if(act.sa_handler == SIG_DFL && 
+       sigaction(sig,NULL,&oact) == -1) {
+        perror("set signal handler error");
+        return -1;
+    }
+    
+    return 0;
+}
+
+
 int creat_socket(const char *port)
 {
     struct addrinfo hints,*res,*rp;
@@ -133,7 +160,7 @@ int main(int argc,char *argv[])
     struct se ev[MAX];
     struct rlimit res;
     
-    signal(SIGPIPE,SIG_IGN);
+    set_signal_handler(SIGPIPE,SIG_IGN);
 
     if(argc != 2) {
         fprintf(stderr,"usage:%s port\n",argv[0]);
@@ -300,8 +327,11 @@ static int handle_read(struct se *p)
     int len;
  again:
     if((len = read(p->fd,p->rbuf,LEN))<0) {
-        if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+        //printf("read error:%s\n",strerror(errno));
+        if(errno == EINTR)
             goto again;
+        if( errno == EAGAIN || errno == EWOULDBLOCK)
+            return 0;
 
         fprintf(stderr,"recv error:%s,fd:%d",strerror(errno),p->fd);        
         return -1;
