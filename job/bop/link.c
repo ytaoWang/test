@@ -61,6 +61,19 @@ struct link * delete(struct link *prev)
     return list;
 }
 
+unsigned int length(const struct link *list)
+{
+    unsigned int len = 0;
+    
+    while(list->next) {
+        list = list->next;
+        len++;
+    }
+    
+    return len;
+}
+
+
 void print(const struct link *list)
 {
     while(list) {
@@ -69,6 +82,45 @@ void print(const struct link *list)
     }
     
 }
+
+const struct link * intersection(const struct link *list1,const struct link *list2)
+{
+    unsigned int l1,l2,step;
+    const struct link *p,*q;
+    
+    l1 = length(list1);
+    l2 = length(list2);
+    p = NULL;
+    q = NULL;
+    
+    /*
+     * 链表长度长的先走(l1 - l2)步
+     */
+    if(l1 < l2) {
+        step = l2 - l1;
+        p = list2;
+        q = list1;
+    } else {
+        step = l1 - l2;
+        p = list1;
+        q = list2;
+    }
+    
+    while(step > 0) {
+        p = p->next;
+        step--;
+    }
+    /*
+     * 共同走步数，找出交点
+     */
+    while(p && q && p != q) {
+        p = p->next;
+        q = q->next;
+    }
+    
+    return p;
+}
+
 
 /*
  * 链表逆序，一次遍历
@@ -139,9 +191,43 @@ void test_reverse(void)
     print(head);
 }
 
+void test_intersection(void)
+{
+    struct link list1[4],list2[2],list3[3];
+    struct link *head1,*head2,*head3;
+    
+    int i;
+    
+    for(i = 0;i < sizeof(list1)/sizeof(list1[0]);++i)
+        init(&list1[i],i);
+    for(i = 0;i < sizeof(list2)/sizeof(list2[0]);++i)
+        init(&list2[i],i*2);
+    for(i = 0;i < sizeof(list3)/sizeof(list3[0]);++i)
+        init(&list3[i],i*3);
+    
+    head1 = list1;
+    head2 = list2;
+    head3 = list3;
+    
+    for(i = 1;i< sizeof(list1)/sizeof(list1[0]);i++)
+        insert(head1,list1+i);
+    for(i = 1;i< sizeof(list2)/sizeof(list2[0]);i++)
+        insert(head2,list2+i);
+    for(i = 1;i< sizeof(list3)/sizeof(list3[0]);i++)
+        insert(head3,list3+i);
+    
+    insert(list1+1,head3);
+    insert(list2+1,head3);
+    
+    printf("intersection point:%p,head3:%p\n",\
+           intersection(list1,list2),head3);
+    
+}
+
 
 int main(int argc,char *argv[])
 {
-    test_reverse();
+    //test_reverse();
+    test_intersection();
     return 0;
 }
