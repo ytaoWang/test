@@ -1,4 +1,15 @@
 #! /usr/bin/env python
+# 
+# multi inheritance view
+#                         /------ 7-------\ 
+#                        /        |        \
+#                       4       - 5         6
+#                         \\   /           /
+#                           2-/\--- 3------/
+#                            \   /    
+#                             0,1     
+#
+#
 
 class C7(object):
     def test(self):
